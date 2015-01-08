@@ -1,0 +1,374 @@
+#!/usr/bin/awk -f
+
+BEGIN {
+#	line = "f(x) \"\\h'2p'\"= \"\\h'2p'\" a over { b \"\\h'2p'\" + \"\\h'2p'\" 1 over { gamma + int xdx }~~ }~~ ~~"
+#	line = "dx over dy = x sub i sup k + y sub i sup n"
+#	line = "S = { a sub 1 x sub 1 + a sub 2 x sub 2 + a sub 3 x sub 3 + ... + a sub n x sub n } over { a sub 1 + a sub 2 }"
+	line = "A sup x sup b sub c sup y "
+#	line = "F(x, y) = int2 f(x, y) dx dy"
+	line = "F(u, v) = int2 sub { - inf } sup inf f(x,y) e sup { -j2 pi (ux + vy) } dx dy } "
+#	line = "abc \"abc def\" xyz"
+#	line = "abc \"abcdef"
+	pos = 1			# position in the input line
+	next_word = ""		# next word in input line (internal only)
+	next_pspace = ""	# spaces before next word in input line (internal)
+	next_sspace = ""	# spaces after next word in input line (internal)
+	preceding_space = ""	# spaces before word, available after getword()
+	subsequent_space = ""	# spaces following word (attached to it), available after getword
+	dnumber = 0		# troff definition number, used to generate register/string names
+	subslvl = 0		# subscript level, 0 means main equation line
+
+	# Space table holds troff replacement for space characters.
+#	spacetab["~"] = "\\h'1n'"
+	spacetab["~"] = "\\h'\\n[.ss]u*1m/36u'"
+	spacetab["^"] = "\\h'\\n[.ss]u*1m/72u'"
+
+	# Operator substitutions.
+	# If any operator requires romanization, insert
+	# the font change sequence in the substitution string.
+	# Operator substitutions go literally to troff output,
+	# you don't need to double quote them.
+	opsubstab["+"] = "\\(pl"
+	opsubstab["-"] = "\\(mi"
+	opsubstab["="] = "\\(eq"
+	opsubstab["/"] = "\\(f/"
+
+	# Word substitutions processed recursively. This table is
+	# filled by the user through `define' statement.
+	# To prevent font escaping, enclose definition in double quotes.
+	# Double quoted defintion will go literally to troff output.
+	substab["int"] = "\"\\s+6\\[integral]\\s0\""
+	substab["int2"] = "\"\\s+6\\[integral]\\[integral]\\s0\""
+	substab["GAMMA"] = "\"\\[*G]\""
+	substab["gamma"] = "\"\\[*g]\""
+	substab["PI"] = "\"\\[*P]\""
+	substab["pi"] = "\"\\[*p]\""
+	substab["inf"] = "\"\\[if]\""
+
+	print ".ps 12"
+	print ".vs 14"
+	print ".sp 2v"
+
+	print ".ft I"
+
+	# For each sub/superscript level:
+	#
+	# 0sup<LEVEL>
+	#	superscript baseline shift
+	# 0sub<LEVEL>
+	#	subscript baseline shift
+	# 0s<LEVEL>font
+	#	font size
+	# 0s<LEVEL>dmin
+	#	minimum distance between sub- and sup- boxes to
+	#	enable automatic compensation
+	print ".nr 0sup1 7p\n" \
+	      ".nr 0sup2 3p\n" \
+	      ".nr 0sub1 0-2p\n" \
+	      ".nr 0sub2 0-2p\n" \
+	      ".nr 0s1font 8p\n" \
+	      ".nr 0s2font 6p\n" \
+	      ".nr 0s3font 4p\n" \
+	      ".nr 0s1dmin 2p\n" \
+	      ".nr 0s2dmin 1p"
+
+	print boxlist()
+
+#	while (w = getword()) {
+#		print "word=" w " preceding_space=" preceding_space
+#		print "next word=" nextword() " preceding_space=" next_space
+#		printf "%s%s-", preceding_space, fontescape(w)
+#	}
+#	print preceding_space
+#	print deffrac("abc", "def")
+#	print "1 + " deffrac("1", "1 + " deffrac("abc", "1 + " deffrac("xyz", "1 + ...")))
+}
+
+# This function generates troff line with fraction,
+# where numerator string is in `num' and denominator in `den'.
+# Definitions are printed to standard output.
+function deffrac(num, den,	n)
+{
+	n = dnumber
+	print ".ds 0s"n" "num"\n" \
+	      ".nr 0w"n" \\w'\\*[0s"n"]'\n" \
+	      ".nr 0t"n" 0\\n[rst]\n" \
+	      ".nr 0b"n" 0\\n[rsb]"
+	n++
+	print ".ds 0s"n" "den"\n" \
+	      ".nr 0w"n" \\w'\\*[0s"n"]'\n" \
+	      ".nr 0t"n" 0\\n[rst]\n" \
+	      ".nr 0b"n" 0\\n[rsb]"
+	n++
+	print ".nr 0w"n" \\n[0w"n-2"]>?\\n[0w"n-1"]"
+	dnumber += 3
+	return "\\Z\\(EQ\\v'0+\\n[0b"n-2"]u-2p-26M'\\h'\\n[0w"n"]u-\\n[0w"n-2"]u/2u+2p'"num"\\(EQ" \
+	       "\\Z\\(EQ\\v'\\n[0t"n-1"]u'\\h'\\n[0w"n"]u-\\n[0w"n-1"]u/2u+2p'"den"\\(EQ" \
+	       "\\v'0-26M'\\D'l \\n[0w"n"]u+4p 0'\\v'26M'"
+}
+
+# This function generates troff line with subscript `subs'
+# and superscript `sups'. Both are optional. Subscripting level
+# is provided by the user by `lvl' starting from one.
+# Defintions are printed to standard output.
+function defsubsup(subs, sups, lvl,	res, n, nsub, nsup)
+{
+	n = dnumber
+
+	# Macro strings 0fontsave and 0fontrestore save and restore
+	# font size of the current environment.
+	print ".ds 0fontsave"n" \\R'0f0save"n" \\\\n(.s'\\s0\\R'0f1save"n" \\\\n(.s'\\s0\n" \
+	      ".ds 0fontrestore"n" \\s'\\\\n[0f1save"n"]'\\s'\\\\n[0f0save"n"]'"
+	
+	if (subs)
+		subs = "\\*[0fontsave"n"]\\s'\\n[0s"lvl"font]u'" subs "\\*[0fontrestore"n"]"
+	if (sups)
+		sups = "\\*[0fontsave"n"]\\s'\\n[0s"lvl"font]u'" sups "\\*[0fontrestore"n"]"
+
+	if (subs) {
+		n++
+		print ".nr 0w"n" 0\\w'"subs"'\n" \
+		      ".nr 0u"n" 0\\n[0sub"lvl"]\n" \
+		      ".nr 0t"n" 0\\n[rst]+\\n[0u"n"]\n" \
+		      ".nr 0b"n" 0\\n[rsb]"
+		nsub = n
+	}
+	if (sups) {
+		n++
+		print ".nr 0w"n" 0\\w'"sups"'\n" \
+		      ".nr 0u"n" 0\\n[0sup"lvl"]\n" \
+		      ".nr 0b"n" 0\\n[rsb]+\\n[0u"n"]\n" \
+		      ".nr 0t"n" 0\\n[rst]"
+		nsup = n
+	}
+	if (subs && sups) {
+		# Correct the distance between sub- and superscript.
+		# If the distance between the sub- and superscript boxes
+		# is less then allowed minimum, compensate baseline position
+		# evenly between them.
+		print ".if (\\n[0b"nsup"]-\\n[0t"nsub"])<\\n[0s"lvl"dmin] \\{\\\n" \
+		      ".    nr 0u"nsup" +((\\n[0s"lvl"dmin]-(\\n[0b"nsup"]-\\n[0t"nsub"]))/2u)\n" \
+		      ".    nr 0u"nsub" -((\\n[0s"lvl"dmin]-(\\n[0b"nsup"]-\\n[0t"nsub"]))/2u)\n" \
+		      ".\\}"
+	}
+	
+	if (subs)
+		res = res "\\Z\\(EQ\\v'0-\\n[0u"nsub"]u'"subs"\\(EQ" \
+		      "\\v'0-(\\n[0u"nsub"]u+\\n[0b"nsub"]u'\\&" \
+		      "\\v'\\n[0u"nsub"]u+\\n[0b"nsub"]u'"
+	if (sups)
+		res = res "\\Z\\(EQ\\v'-\\n[0u"nsup"]u'"sups"\\(EQ" \
+		      "\\v'-(\\n[0u"nsup"]u+\\n[0t"nsup"]u)'\\&" \
+		      "\\v'\\n[0u"nsup"]u+\\n[0t"nsup"]u'"
+	dnumber = n
+	return res "\\h'\\w'"subs"'u>?\\w'"sups"'u'"
+}
+
+function boxlist()
+{
+	return box_or_fraction() rest_boxlist() subsequent_space
+}
+
+function rest_boxlist(	w, res)
+{
+	while ((w = nextword()) && w != "}")
+		res = res box_or_fraction()
+	return res
+}
+
+function box_or_fraction(	box_num, box_den)
+{
+	box_num = box()
+	if (nextword() == "over") {
+		getword()
+		box_den = box_or_fraction()
+		return deffrac(box_num, box_den)
+	}
+	return box_num
+}
+
+# This is where the real magic is done for the box.
+# 
+# Set nosubsup to 1 if you don't want to parse subscript/superscript.
+#
+function real_box(nosubsup,	res, w)
+{
+	res = ""
+
+	switch (nextword()) {
+#	case /^(pile|rpile|cpile|lpile)$/:
+#		print "pile!!"
+#		break
+	case "{":
+		getword()
+		res = preceding_space boxlist()
+		if (nextword() == "}") {
+			getword()
+			# add spaces collected right after closing `}'
+			res = res subsequent_space (nosubsup ? "" : maybesubsup())
+		}
+		break
+	default:
+		# we need to invoke getword() separately, because of `preceding_space'
+		w = getword()
+		res = preceding_space fontescape(w) subsequent_space (nosubsup ? "" : maybesubsup())
+		break
+	}
+
+	return res
+	
+}
+
+function box( )
+{
+	return real_box(0)
+}
+
+function box_nosubsup()
+{
+	return real_box(1)
+}
+
+function maybesubsup()
+{
+	if (nextword() == "sub" || nextword() == "sup")
+		return subsup()
+	return ""
+}
+
+function subsup(	w, res, subs, sups)
+{
+	subslvl++
+
+	w = getword()
+	if (w == "sub") {
+		res = preceding_space
+		# After `sub' next box can't have superscript/subscript.
+		subs = box_nosubsup()
+		if (nextword() == "sup") {
+			getword()
+			sups = preceding_space box()
+		}
+	} else if (w == "sup") {
+		res = preceding_space
+		sups = box()
+	} else {
+		printf "subsup: should not reach!" >"/dev/stderr"
+	}
+	res = res defsubsup(subs, sups, subslvl)
+	subslvl--
+	return res
+}
+
+function chr(line, pos)
+{
+	return substr(line, pos, 1)
+}
+
+function nextword(	space)
+{
+	if (!next_word) {
+		next_word = real_getword(space)
+		next_pspace = space[0]
+		next_sspace = space[1]
+	}
+	return next_word
+}
+
+function getword(	res, space)
+{
+	if (next_word) {
+		res = next_word
+		preceding_space = next_pspace
+		subsequent_space = next_sspace
+		next_word = ""
+	} else {
+		res = real_getword(space)
+		preceding_space = space[0]
+		subsequent_space = space[1]
+	}
+	return res
+}
+
+# This function romanizes parenthesis, digits and operators.
+# Variables are italic corrected before and after.
+# Double-quoted blocks (troff literal blocks) are skipped.
+# Operator substitutions are looked up in `opsubstab' table.
+function fontescape(word,	c, i, res)
+{
+	for (i = 1; c = chr(word, i); i++) {
+		if (c == "\"") {
+			# Here we skip the literal part.
+			for (++i; (c = chr(word, i)) && c != "\""; i++) {
+				res = res c
+			}
+			continue
+		}
+		if (c in opsubstab) {
+			res = res opsubstab[c]
+		} else if (c ~ /[0-9]/) {
+			res = res "\\fR\\," c "\\/\\fP"
+		} else if (c ~ /[a-zA-Z]/) {
+			res = res "\\," c
+			while ((c = chr(word, i+1)) ~ /[a-zA-Z]/) {
+				res = res c
+				i++
+			}
+			res = res "\\/"
+		} else if (c ~ /[][(){}]/) {
+			res = res "\\fR\\," c "\\/\\fP"
+		} else
+			res = res c
+	}
+	return res
+}
+
+# helper replaces the word with its substitution at current word position
+function dosubst(w)
+{
+	if (w in substab) {
+		pos -= length(w)
+		line = substr(line, 1, pos-1) substab[w] substr(line, pos+length(w))
+		return 1
+	}
+	return 0
+}
+
+# This function extracts the next word from the line and recursively substitutes it.
+function real_getword(space,	c, res)
+{
+	space[0] = space[1] = ""
+
+	# FIXME:
+	# Insert reasonable substitution recursion limit to prevent endless loops.
+	#
+	do {
+		res = ""
+		# skip delimiting spaces and collect preceeding spaces
+		for ( ; (c = chr(line, pos)) && c ~ /[ ^~]/; pos++) {
+			if (c ~ /[~^]/)
+				space[0] = space[0] spacetab[c]
+		}
+		for ( ; (c = chr(line, pos)) && c !~ /[ ^~]/; pos++) {
+			if (c == "\"") {
+				# Literal blocks last till closing double quote.
+				res = res "\""
+				for (++pos; (c = chr(line, pos)) && c != "\""; pos++)
+					res = res c
+				if (c == "\"") {
+					res = res c
+					continue
+				}
+			} else
+				res = res c
+		}
+		# collect subsequent spaces
+		for ( ; (c = chr(line, pos)) && c ~ /[~^]/; pos++)
+			space[1] = space[1] spacetab[c]
+	} while (dosubst(res))
+
+	# print space[0] " " res " " space[1] >"/dev/stderr"
+
+	return res
+}
+
