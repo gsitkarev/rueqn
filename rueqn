@@ -6,7 +6,9 @@ BEGIN {
 #	line = "S = { a sub 1 x sub 1 + a sub 2 x sub 2 + a sub 3 x sub 3 + ... + a sub n x sub n } over { a sub 1 + a sub 2 }"
 	line = "A sup x sup b sub c sup y "
 #	line = "F(x, y) = int2 f(x, y) dx dy"
-	line = "F(u, v) = int2 sub { - inf } sup inf f(x,y) e sup { -j2 pi (ux + vy) } dx dy } "
+#	line = "F(u, v) \"\\h'2p'\" = \"\\h'2p'\" int2 sub { - inf } sup inf f(x,y) e sup { -j2 pi (ux + vy) } dx dy } "
+	line = "F(u, v) \"\\h'2p'\" = \"\\h'2p'\" int from { - inf } to inf \"\\h'2p'\" int from { - inf } to inf f(x,y) \"\\h'2p'\" e sup { -j2 pi (ux+vy) } dx dy ; ~~"
+	line = line "x \"\\h'2p'\"=\"\\h'2p'\" { sum from i=1 to n w sub i x sub i } over { sum from i=1 to n w sub i } "
 #	line = "abc \"abc def\" xyz"
 #	line = "abc \"abcdef"
 	pos = 1			# position in the input line
@@ -37,13 +39,14 @@ BEGIN {
 	# filled by the user through `define' statement.
 	# To prevent font escaping, enclose definition in double quotes.
 	# Double quoted defintion will go literally to troff output.
-	substab["int"] = "\"\\s+6\\[integral]\\s0\""
-	substab["int2"] = "\"\\s+6\\[integral]\\[integral]\\s0\""
+	substab["int"] = "{ vcenter \"\\s+6\\[integral]\\s0\" }"
+	substab["int2"] = "{ vcenter \"\\s+6\\[integral]\\[integral]\\s0\" }"
 	substab["GAMMA"] = "\"\\[*G]\""
 	substab["gamma"] = "\"\\[*g]\""
 	substab["PI"] = "\"\\[*P]\""
 	substab["pi"] = "\"\\[*p]\""
 	substab["inf"] = "\"\\[if]\""
+	substab["sum"] = "{ vcenter \"\\s+6\\[*S]\\s0\" }"
 
 	print ".ps 12"
 	print ".vs 14"
@@ -164,6 +167,60 @@ function defsubsup(subs, sups, lvl,	res, n, nsub, nsup)
 	return res "\\h'\\w'"subs"'u>?\\w'"sups"'u'"
 }
 
+# This function returns troff vbox
+# with limits centered below (from) and above (to) it.
+# Spaces are added on both sides if the limits are wider than the box itself.
+# Definitions are printed to standard output.
+function deflimits(vbox, from, to,		n)
+{
+	n = dnumber
+
+	print ".nr 0w"n" \\w'"vbox"'\n" \
+	      ".nr 0t"n" 0\\n[rst]\n" \
+	      ".nr 0b"n" 0\\n[rsb]\n" \
+	      ".nr 0s"n" (\\n[0w"n"]>?\\w'"from"'>?\\w'"to"')-\\n[0w"n"]"
+
+	# Limits are spaced by 1 point from the box.
+	if (from) {
+		n++
+		print ".nr 0w"n" 0\\w'"from"'\n" \
+		      ".nr 0t"n" 0\\n[rst]\n" \
+		      ".nr 0b"n" 0\\n[rsb]"
+		res = "\\Z\\(EQ" \
+		      "\\h'-(\\n[0w"dnumber"]u+\\n[0w"n"]u)/2u'" \
+		      "\\v'0\\n[0t"n"]u-\\n[0b"dnumber"]u+1p'" \
+		      from "\\(EQ"
+	}
+	if (to) {
+		n++
+		print ".nr 0w"n" \\w'"to"'\n" \
+		      ".nr 0t"n" 0\\n[rst]\n" \
+		      ".nr 0b"n" 0\\n[rsb]"
+		res = res "\\Z\\(EQ" \
+		      "\\h'-(\\n[0w"dnumber"]u+\\n[0w"n"]u)/2u'" \
+		      "\\v'-(\\n[0t"dnumber"]u-\\n[0b"n"]u+1p'" \
+		      to "\\(EQ"
+	}
+	res = "\\h'\\n[0s"dnumber"]u/2u'" vbox res "\\h'\\n[0s"dnumber"]u/2u'"
+	dnumber = n+1
+	return res
+}
+
+# This function returns troff vbox centered vertically against the main formula line.
+function vcenter(vbox,		n)
+{
+	n = dnumber
+
+	print ".nr 0w"n" \\w'"vbox"'\n" \
+	      ".nr 0t"n" 0\\n[rst]\n" \
+	      ".nr 0b"n" 0\\n[rsb]"
+	res = "\\v'(\\n[0t"n"]u+\\n[0b"n"]u/2u-28M)'" \
+	      vbox \
+	      "\\v'-(\\n[0t"n"]u+\\n[0b"n"]u/2u-28M)'"
+	dnumber += 1
+	return res
+}
+
 function boxlist()
 {
 	return box_or_fraction() rest_boxlist() subsequent_space
@@ -199,6 +256,10 @@ function real_box(nosubsup,	res, w)
 #	case /^(pile|rpile|cpile|lpile)$/:
 #		print "pile!!"
 #		break
+	case "vcenter":
+		getword()
+		res = preceding_space vcenter(box())
+		break
 	case "{":
 		getword()
 		res = preceding_space boxlist()
@@ -216,17 +277,40 @@ function real_box(nosubsup,	res, w)
 	}
 
 	return res
-	
+}
+
+# This function parses definitions of from-to limits (if any)
+# following the box `vbox' and returns result as a troff string.
+function maybelimits(vbox,	res, from, to)
+{
+	res = vbox
+	if (nextword() == "from") {
+		getword()
+		res = res preceding_space
+		from = box()
+		if (nextword() == "to") {
+			getword()
+			# spaces preceeding `to' are related to box, following `from'
+			from = from preceding_space
+			to = box()
+		}
+		# TODO:
+		# What shall we do with the font selection here???
+		# Currently we just reduce the font by 4 points.
+		# What if we use the font level mechanism like in subscripts?
+		res = deflimits(res, "\\s-4"from"\\s0", "\\s-4"to"\\s0")
+	}
+	return res
 }
 
 function box( )
 {
-	return real_box(0)
+	return maybelimits(real_box(0))
 }
 
 function box_nosubsup()
 {
-	return real_box(1)
+	return maybelimits(real_box(1))
 }
 
 function maybesubsup()
