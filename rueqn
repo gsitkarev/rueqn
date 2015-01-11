@@ -1,13 +1,22 @@
 #!/usr/bin/awk -f
 
 BEGIN {
+	# Operator precedence levels.
+	P_TO = 0; P_FROM = 1;
+	P_OVER = 10; P_SQRT = 11; P_SUP = 12; P_SUB = 13;
+	P_VCENTER = 14;		# custom box centering operator
+	P_SIZE = 21; P_BOLD = 22; P_ITALIC = 23; P_ROMAN = 24; P_FAT = 25;
+	P_UP = 30; P_DOWN = 31; P_BACK = 32; P_FWD = 33;
+	P_DOTDOT = 41; P_DOT = 42; P_HAT = 43; P_TILDE = 44; P_BAR = 45;
+	P_UNDER = 46; P_VEC = 47; P_DYAD = 48;
+
 #	line = "f(x) \"\\h'2p'\"= \"\\h'2p'\" a over { b \"\\h'2p'\" + \"\\h'2p'\" 1 over { gamma + int xdx }~~ }~~ ~~"
 #	line = "dx over dy = x sub i sup k + y sub i sup n"
-#	line = "S = { a sub 1 x sub 1 + a sub 2 x sub 2 + a sub 3 x sub 3 + ... + a sub n x sub n } over { a sub 1 + a sub 2 }"
-	line = "A sup x sup b sub c sup y "
+	line = line "S = { a sub 1 x sub 1 + a sub 2 x sub 2 + a sub 3 x sub 3 + ... + a sub n x sub n } over { a sub 1 + a sub 2 } ; ~~"
+	line = line "B sub x sub c sup b \"\\h'2p'\" = \"\\h'2p'\" A sup x sup b sub c sup y ; ~~"
 #	line = "F(x, y) = int2 f(x, y) dx dy"
 #	line = "F(u, v) \"\\h'2p'\" = \"\\h'2p'\" int2 sub { - inf } sup inf f(x,y) e sup { -j2 pi (ux + vy) } dx dy } "
-	line = "F(u, v) \"\\h'2p'\" = \"\\h'2p'\" int from { - inf } to inf \"\\h'2p'\" int from { - inf } to inf f(x,y) \"\\h'2p'\" e sup { -j2 pi (ux+vy) } dx dy ; ~~"
+	line = line "F(u, v) \"\\h'2p'\" = \"\\h'2p'\" int from { - inf } to inf \"\\h'2p'\" int from { - inf } to inf f(x,y) \"\\h'2p'\" e sup { -j2 pi (ux+vy) } dx dy ; ~~~"
 	line = line "x \"\\h'2p'\"=\"\\h'2p'\" { sum from i=1 to n w sub i x sub i } over { sum from i=1 to n w sub i } "
 #	line = "abc \"abc def\" xyz"
 #	line = "abc \"abcdef"
@@ -46,10 +55,10 @@ BEGIN {
 	substab["PI"] = "\"\\[*P]\""
 	substab["pi"] = "\"\\[*p]\""
 	substab["inf"] = "\"\\[if]\""
-	substab["sum"] = "{ vcenter \"\\s+6\\[*S]\\s0\" }"
+	substab["sum"] = "{ \"\\s+6\\[*S]\\s0\" }"
 
-	print ".ps 12"
-	print ".vs 14"
+	print ".ps 10"
+	print ".vs 12"
 	print ".sp 2v"
 
 	print ".ft I"
@@ -66,25 +75,16 @@ BEGIN {
 	#	minimum distance between sub- and sup- boxes to
 	#	enable automatic compensation
 	print ".nr 0sup1 7p\n" \
-	      ".nr 0sup2 3p\n" \
+	      ".nr 0sup2 4p\n" \
 	      ".nr 0sub1 0-2p\n" \
 	      ".nr 0sub2 0-2p\n" \
 	      ".nr 0s1font 8p\n" \
 	      ".nr 0s2font 6p\n" \
 	      ".nr 0s3font 4p\n" \
-	      ".nr 0s1dmin 2p\n" \
+	      ".nr 0s1dmin 1p\n" \
 	      ".nr 0s2dmin 1p"
 
 	print boxlist()
-
-#	while (w = getword()) {
-#		print "word=" w " preceding_space=" preceding_space
-#		print "next word=" nextword() " preceding_space=" next_space
-#		printf "%s%s-", preceding_space, fontescape(w)
-#	}
-#	print preceding_space
-#	print deffrac("abc", "def")
-#	print "1 + " deffrac("1", "1 + " deffrac("abc", "1 + " deffrac("xyz", "1 + ...")))
 }
 
 # This function generates troff line with fraction,
@@ -171,7 +171,7 @@ function defsubsup(subs, sups, lvl,	res, n, nsub, nsup)
 # with limits centered below (from) and above (to) it.
 # Spaces are added on both sides if the limits are wider than the box itself.
 # Definitions are printed to standard output.
-function deflimits(vbox, from, to,		n)
+function deflimits(vbox, from, to,		res, n)
 {
 	n = dnumber
 
@@ -207,7 +207,7 @@ function deflimits(vbox, from, to,		n)
 }
 
 # This function returns troff vbox centered vertically against the main formula line.
-function vcenter(vbox,		n)
+function defvcenter(vbox,		n, res)
 {
 	n = dnumber
 
@@ -221,126 +221,98 @@ function vcenter(vbox,		n)
 	return res
 }
 
-function boxlist()
-{
-	return box_or_fraction() rest_boxlist() subsequent_space
-}
-
-function rest_boxlist(	w, res)
+function boxlist(	w, res)
 {
 	while ((w = nextword()) && w != "}")
-		res = res box_or_fraction()
+		res = res box("", -1)
 	return res
 }
 
-function box_or_fraction(	box_num, box_den)
+# Prints the message to standard error and exit with non-zero code.
+function errx(msg)
 {
-	box_num = box()
-	if (nextword() == "over") {
+	printf "rueqn[%u]: near position %d: %s\n", PROCINFO["pid"], pos, msg >"/dev/stderr"
+	exit 1
+}
+
+function box(leftside, minprec,		w, res, numbox, denbox, subbox, supbox, frombox, tobox)
+{
+	if (nextword() == "vcenter" && minprec <= V_CENTER) {
 		getword()
-		box_den = box_or_fraction()
-		return deffrac(box_num, box_den)
-	}
-	return box_num
-}
-
-# This is where the real magic is done for the box.
-# 
-# Set nosubsup to 1 if you don't want to parse subscript/superscript.
-#
-function real_box(nosubsup,	res, w)
-{
-	res = ""
-
-	switch (nextword()) {
-#	case /^(pile|rpile|cpile|lpile)$/:
-#		print "pile!!"
-#		break
-	case "vcenter":
+		res = leftside preceding_space defvcenter(box("", V_CENTER))
+	} else if (nextword() == "sup" && minprec <= P_SUP) {
+		if (!leftside)
+			errx("missing box for `sup'")
 		getword()
-		res = preceding_space vcenter(box())
-		break
-	case "{":
+		if (minprec != P_SUB)
+			subslvl++
+		supbox = box("", P_SUP)
+		res = leftside preceding_space defsubsup("", supbox, subslvl)
+		if (minprec != P_SUB)
+			subslvl--
+	} else if (nextword() == "sub" && minprec <= P_SUB) {
+		if (!leftside)
+			errx("missing box for `sub'")
 		getword()
-		res = preceding_space boxlist()
-		if (nextword() == "}") {
-			getword()
-			# add spaces collected right after closing `}'
-			res = res subsequent_space (nosubsup ? "" : maybesubsup())
-		}
-		break
-	default:
-		# we need to invoke getword() separately, because of `preceding_space'
-		w = getword()
-		res = preceding_space fontescape(w) subsequent_space (nosubsup ? "" : maybesubsup())
-		break
-	}
-
-	return res
-}
-
-# This function parses definitions of from-to limits (if any)
-# following the box `vbox' and returns result as a troff string.
-function maybelimits(vbox,	res, from, to)
-{
-	res = vbox
-	if (nextword() == "from") {
-		getword()
-		res = res preceding_space
-		from = box()
-		if (nextword() == "to") {
-			getword()
-			# spaces preceeding `to' are related to box, following `from'
-			from = from preceding_space
-			to = box()
-		}
-		# TODO:
-		# What shall we do with the font selection here???
-		# Currently we just reduce the font by 4 points.
-		# What if we use the font level mechanism like in subscripts?
-		res = deflimits(res, "\\s-4"from"\\s0", "\\s-4"to"\\s0")
-	}
-	return res
-}
-
-function box( )
-{
-	return maybelimits(real_box(0))
-}
-
-function box_nosubsup()
-{
-	return maybelimits(real_box(1))
-}
-
-function maybesubsup()
-{
-	if (nextword() == "sub" || nextword() == "sup")
-		return subsup()
-	return ""
-}
-
-function subsup(	w, res, subs, sups)
-{
-	subslvl++
-
-	w = getword()
-	if (w == "sub") {
-		res = preceding_space
-		# After `sub' next box can't have superscript/subscript.
-		subs = box_nosubsup()
+		leftside = leftside preceding_space
+		subslvl++
+		subbox = box("", P_SUB)
 		if (nextword() == "sup") {
 			getword()
-			sups = preceding_space box()
+			supbox = preceding_space box("", P_SUP)
 		}
-	} else if (w == "sup") {
-		res = preceding_space
-		sups = box()
+		res = leftside defsubsup(subbox, supbox, subslvl)
+		subslvl--
+	} else if (nextword() == "to" && minprec <= P_TO) {
+		if (!leftside)
+			errx("missing box to apply `to' to")
+		getword()
+		tobox = box("", P_TO)
+		leftside = leftside preceding_space
+		res = deflimits(leftside, "", tobox)
+	} else if (nextword() == "from" && minprec <= P_FROM) {
+		if (!leftside)
+			errx("missing box to apply `from' to")
+		getword()
+		leftside = leftside preceding_space
+		frombox = box("", P_FROM)
+		if (nextword() == "to") {
+			getword()
+			tobox = preceding_space box("", P_TO)
+		}
+		res = deflimits(leftside, frombox, tobox)
+	} else if (nextword() == "over" && minprec < P_OVER) {
+		if (!leftside)
+			errx("missing left side for `over'")
+		# Operator `over' associates to the left.
+		# We replace the left side with the fraction and proceed
+		# with the operators.
+		getword()
+		numbox = leftside preceding_space
+		denbox = box("", P_OVER)
+		res = box(deffrac(numbox, denbox), -1)
 	} else {
-		printf "subsup: should not reach!" >"/dev/stderr"
+		if (leftside) {
+			# No operators can be applied to the leftside.
+			# The result of this box is the leftside itself.
+			res = leftside
+		} else {
+			# No leftside yet, get the word and use it
+			# as a leftside for the box recursively.
+			if (nextword() == "{") {
+				getword()
+				leftside = preceding_space boxlist()
+				if (nextword() != "}")
+					errx("missing closing `}'")
+				getword()
+			} else {
+				w = getword()
+				leftside = preceding_space fontescape(w) subsequent_space
+			}
+			res = box(leftside, minprec)
+		}
 	}
-	res = res defsubsup(subs, sups, subslvl)
-	subslvl--
+
 	return res
 }
 
