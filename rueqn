@@ -10,7 +10,6 @@ BEGIN {
 	P_DOTDOT = 41; P_DOT = 42; P_HAT = 43; P_TILDE = 44; P_BAR = 45;
 	P_UNDER = 46; P_VEC = 47; P_DYAD = 48;
 
-#	line = "f(x) \"\\h'2p'\"= \"\\h'2p'\" a over { b \"\\h'2p'\" + \"\\h'2p'\" 1 over { gamma + int xdx }~~ }~~ ~~"
 #	line = "dx over dy = x sub i sup k + y sub i sup n"
 	line = line "S = { a sub 1 x sub 1 + a sub 2 x sub 2 + a sub 3 x sub 3 + ... + a sub n x sub n } over { a sub 1 + a sub 2 } ; ~~"
 	line = line "B sub x sub c sup b \"\\h'2p'\" = \"\\h'2p'\" A sup x sup b sub c sup y ; ~~"
@@ -54,12 +53,15 @@ BEGIN {
 	substab["gamma"] = "\"\\[*g]\""
 	substab["PI"] = "\"\\[*P]\""
 	substab["pi"] = "\"\\[*p]\""
+	substab["epsilon"] = "\"\\(*e\""
 	substab["inf"] = "\"\\[if]\""
-	substab["sum"] = "{ \"\\s+6\\[*S]\\s0\" }"
+	substab["sum"] = "{ vcenter \"\\s+6\\[*S]\\s0\" }"
 
-	print ".ps 10"
-	print ".vs 12"
-	print ".sp 2v"
+	print ".ps 12"
+	print ".vs 14"
+	print ".po 1c"
+	print ".ll +1i"
+	print ".sp 8v"
 
 	print ".ft I"
 
@@ -84,6 +86,17 @@ BEGIN {
 	      ".nr 0s1dmin 1p\n" \
 	      ".nr 0s2dmin 1p"
 
+	line = "f(x,y,z) = \"\\h'2p'\" lpile { int from { - inf } to { + inf } g(x) dx above int from 0 to inf h(x) dx above int from 0 to inf f(x) dx } ; ~~"
+	line = line "cpile { int dx over { ae sup mx - be sup -mx } above int from { - inf } to { + inf } g(x)f(x) dx above a sub 0 + b sub 1 over x } ; ~~ "
+	line = line "A + B = matrix { ccol { a above b above c } ccol { d above e above f } ccol { g above h above k } } ; ~~"
+
+	line = line "matrix { ccol { a sub 1 above b sub 1 above c sub 1 } " \
+		 "ccol { a sub 2 above b sub 2 above c sub 2 } " \
+		 "ccol { a sub 3 above b sub 3 above c sub 3 } } \"\\h'2p'\"=\"\\h'2p'\" " \
+		 "sum from i,j,k=1 to 3 epsilon sub ijk a sub i b sub j c sub k ; ~~"
+	
+	line = line "f(x) \"\\h'2p'\"= \"\\h'2p'\" a over { b \"\\h'2p'\" + \"\\h'2p'\" 1 over { gamma + int xdx }~~ }~~ ~~"
+	#line = "b sub 1 over x"
 	print boxlist()
 }
 
@@ -175,6 +188,16 @@ function deflimits(vbox, from, to,		res, n)
 {
 	n = dnumber
 
+	# Macro strings 0fontsave and 0fontrestore save and restore
+	# font size of the current environment.
+	print ".ds 0fontsave"n" \\R'0f0save"n" \\\\n(.s'\\s0\\R'0f1save"n" \\\\n(.s'\\s0\n" \
+	      ".ds 0fontrestore"n" \\s'\\\\n[0f1save"n"]'\\s'\\\\n[0f0save"n"]'"
+
+	if (from)
+		from = "\\*[0fontsave"n"]\\s'\\n[0s"subslvl+1"font]u'" from "\\*[0fontrestore"n"]"
+	if (to)
+		to = "\\*[0fontsave"n"]\\s'\\n[0s"subslvl+1"font]u'" to "\\*[0fontrestore"n"]"
+
 	print ".nr 0w"n" \\w'"vbox"'\n" \
 	      ".nr 0t"n" 0\\n[rst]\n" \
 	      ".nr 0b"n" 0\\n[rsb]\n" \
@@ -221,9 +244,48 @@ function defvcenter(vbox,		n, res)
 	return res
 }
 
+# This function prints column definition to standard output.
+function defcolent(dnum, col, row, text,	n)
+{
+	n = dnum
+
+	print ".ds 0s"n"c"col","row" "text"\n" \
+	      ".nr 0w"n"c"col" 0\\w'"text"'>?\\n[0w"n"c"col"]\n" \
+	      ".nr 0t"n"r"row" 0\\n[rst]>?\\n[0t"n"r"row"]\n" \
+	      ".nr 0b"n"r"row" 0\\n[rsb]<?\\n[0b"n"r"row"]"
+}
+
+function defcolumn(dnum, col, nrows, adj,	res, row, ha)
+{
+	n = dnum
+
+	if (nrows) {
+		res = "\\Z\\(EQ"
+		for (row = nrows-1; row >= 0; row--) {
+			switch (adj) {
+			case /[r|R]/: ha = "\\h'\\En[0w"n"c"col"]u-\\w'\\*[0s"n"c"col","row"]'u'"; break
+			case /[c|C]/: ha = "\\h'\\En[0w"n"c"col"]u-\\w'\\*[0s"n"c"col","row"]'u/2u'"; break
+			case /[l|L]/: break
+			}
+			res = res (row < nrows-1 ? "\\v'-(\\En[0t"n"r"row+1"]u-\\En[0b"n"r"row"]u+4p)'" : "") \
+					"\\Z'"ha"\\*[0s"n"c"col","row"]'"
+		}
+		res = res "\\(EQ\\h'\\En[0w"n"c"col"]u'"
+	}
+
+	return res
+}
+
 function boxlist(	w, res)
 {
 	while ((w = nextword()) && w != "}")
+		res = res box("", -1)
+	return res
+}
+
+function pilelist(	w, res)
+{
+	while ((w = nextword()) && w != "}" && w != "above")
 		res = res box("", -1)
 	return res
 }
@@ -235,21 +297,21 @@ function errx(msg)
 	exit 1
 }
 
-function box(leftside, minprec,		w, res, numbox, denbox, subbox, supbox, frombox, tobox)
+function box(leftside, minprec,		w, dnum, adj, res, row, col, numbox, denbox, subbox, supbox, frombox, tobox)
 {
 	if (nextword() == "vcenter" && minprec <= V_CENTER) {
 		getword()
-		res = leftside preceding_space defvcenter(box("", V_CENTER))
+		leftside = leftside preceding_space defvcenter(box("", V_CENTER))
+		res = box(leftside, minprec)
 	} else if (nextword() == "sup" && minprec <= P_SUP) {
 		if (!leftside)
 			errx("missing box for `sup'")
 		getword()
-		if (minprec != P_SUB)
-			subslvl++
+		subslvl++
 		supbox = box("", P_SUP)
-		res = leftside preceding_space defsubsup("", supbox, subslvl)
-		if (minprec != P_SUB)
-			subslvl--
+		leftside = leftside preceding_space defsubsup("", supbox, subslvl)
+		subslvl--
+		res = box(leftside, minprec)
 	} else if (nextword() == "sub" && minprec <= P_SUB) {
 		if (!leftside)
 			errx("missing box for `sub'")
@@ -261,15 +323,16 @@ function box(leftside, minprec,		w, res, numbox, denbox, subbox, supbox, frombox
 			getword()
 			supbox = preceding_space box("", P_SUP)
 		}
-		res = leftside defsubsup(subbox, supbox, subslvl)
+		leftside = leftside defsubsup(subbox, supbox, subslvl)
 		subslvl--
+		res = box(leftside, minprec)
 	} else if (nextword() == "to" && minprec <= P_TO) {
 		if (!leftside)
 			errx("missing box to apply `to' to")
 		getword()
 		tobox = box("", P_TO)
-		leftside = leftside preceding_space
-		res = deflimits(leftside, "", tobox)
+		leftside = preceding_space deflimits(leftside, "", tobox)
+		res = box(leftside, minprec)
 	} else if (nextword() == "from" && minprec <= P_FROM) {
 		if (!leftside)
 			errx("missing box to apply `from' to")
@@ -280,7 +343,8 @@ function box(leftside, minprec,		w, res, numbox, denbox, subbox, supbox, frombox
 			getword()
 			tobox = preceding_space box("", P_TO)
 		}
-		res = deflimits(leftside, frombox, tobox)
+		leftside = deflimits(leftside, frombox, tobox)
+		res = box(leftside, minprec)
 	} else if (nextword() == "over" && minprec < P_OVER) {
 		if (!leftside)
 			errx("missing left side for `over'")
@@ -290,7 +354,8 @@ function box(leftside, minprec,		w, res, numbox, denbox, subbox, supbox, frombox
 		getword()
 		numbox = leftside preceding_space
 		denbox = box("", P_OVER)
-		res = box(deffrac(numbox, denbox), -1)
+		leftside = deffrac(numbox, denbox)
+		res = box(leftside, minprec)
 	} else {
 		if (leftside) {
 			# No operators can be applied to the leftside.
@@ -305,6 +370,58 @@ function box(leftside, minprec,		w, res, numbox, denbox, subbox, supbox, frombox
 				if (nextword() != "}")
 					errx("missing closing `}'")
 				getword()
+			} else if (nextword() ~ /^[c|l|r]pile/) {
+				w = getword()
+				res = preceding_space
+				adj = substr(w, 1, 1)
+				if (nextword() == "{") {
+					getword()
+					dnum = dnumber++
+					for (row = 0; ; ) {
+						defcolent(dnum, 0, row++, pilelist())
+						if (nextword() != "above")
+							break
+						getword()
+					}
+					if (nextword() == "}") {
+						getword()
+						leftside = defvcenter(defcolumn(dnum, 0, row, adj))
+					} else
+						errx("missing closing `}' in pile")
+				}
+				leftside = res leftside
+			} else if (nextword() == "matrix") {
+				w = getword()
+				res = preceding_space
+				if (nextword() == "{") {
+					getword()
+					col = 0
+					dnum = dnumber++
+					while (nextword() ~ /^[c|r|l]col$/) {
+						w = getword()
+						adj = substr(w, 1, 1)
+						if (nextword() == "{") {
+							getword()
+							for (row = 0; ; ) {
+								defcolent(dnum, col, row++, pilelist())
+								if (nextword() != "above")
+									break
+								getword()
+							}
+							if (nextword() == "}") {
+								getword()
+								leftside = leftside (col > 0 ? "\\h'0.5m'" : "") defcolumn(dnum, col, row, adj)
+							} else
+								errx("missing closing `}' in matrix column")
+						}
+						col++
+					}
+					if (nextword() == "}")
+						getword()
+					else
+						errx("missing closing `}' in matrix definition")
+					leftside = res defvcenter(leftside)
+				}
 			} else {
 				w = getword()
 				leftside = preceding_space fontescape(w) subsequent_space
