@@ -10,13 +10,11 @@ BEGIN {
 	P_DOTDOT = 41; P_DOT = 42; P_HAT = 43; P_TILDE = 44; P_BAR = 45;
 	P_UNDER = 46; P_VEC = 47; P_DYAD = 48;
 
-#	line = "dx over dy = x sub i sup k + y sub i sup n"
+	line = "dx over dy = x sub i sup k + y sub i sup n"
 	line = line "S = { a sub 1 x sub 1 + a sub 2 x sub 2 + a sub 3 x sub 3 + ... + a sub n x sub n } over { a sub 1 + a sub 2 } ; ~~"
 	line = line "B sub x sub c sup b \"\\h'2p'\" = \"\\h'2p'\" A sup x sup b sub c sup y ; ~~"
 #	line = "F(x, y) = int2 f(x, y) dx dy"
 #	line = "F(u, v) \"\\h'2p'\" = \"\\h'2p'\" int2 sub { - inf } sup inf f(x,y) e sup { -j2 pi (ux + vy) } dx dy } "
-	line = line "F(u, v) \"\\h'2p'\" = \"\\h'2p'\" int from { - inf } to inf \"\\h'2p'\" int from { - inf } to inf f(x,y) \"\\h'2p'\" e sup { -j2 pi (ux+vy) } dx dy ; ~~~"
-	line = line "x \"\\h'2p'\"=\"\\h'2p'\" { sum from i=1 to n w sub i x sub i } over { sum from i=1 to n w sub i } "
 #	line = "abc \"abc def\" xyz"
 #	line = "abc \"abcdef"
 	pos = 1			# position in the input line
@@ -27,6 +25,8 @@ BEGIN {
 	subsequent_space = ""	# spaces following word (attached to it), available after getword
 	dnumber = 0		# troff definition number, used to generate register/string names
 	subslvl = 0		# subscript level, 0 means main equation line
+
+	br_macro_flag = 0	# brace pile macro flag, 1 means macro defined
 
 	# Space table holds troff replacement for space characters.
 #	spacetab["~"] = "\\h'1n'"
@@ -57,6 +57,15 @@ BEGIN {
 	substab["inf"] = "\"\\[if]\""
 	substab["sum"] = "{ vcenter \"\\s+6\\[*S]\\s0\" }"
 
+	# brace table, composed of bottom, middle, top and extender characters
+	bracetab["("] = "\\[parenleftbt];\"\";\\[parenlefttp];\\[parenleftex]"
+	bracetab[")"] = "\\[parenrightbt];\"\";\\[parenrighttp];\\[parenrightex]"
+	bracetab["["] = "\\[bracketleftbt];\"\";\\[bracketlefttp];\\[bracketleftex]"
+	bracetab["]"] = "\\[bracketrightbt];\"\";\\[bracketrighttp];\\[bracketrightex]"
+	bracetab["{"] = "\\[braceleftbt];\\[braceleftmid];\\[bracelefttp];\\[braceleftex]"
+	bracetab["}"] = "\\[bracerightbt];\\[bracerightmid];\\[bracerighttp];\\[bracerightex]"
+	bracetab["|"] = "\"\";\"\";\"\";\\[braceex]"
+
 	print ".ps 12"
 	print ".vs 14"
 	print ".po 1c"
@@ -86,17 +95,30 @@ BEGIN {
 	      ".nr 0s1dmin 1p\n" \
 	      ".nr 0s2dmin 1p"
 
-	line = "f(x,y,z) = \"\\h'2p'\" lpile { int from { - inf } to { + inf } g(x) dx above int from 0 to inf h(x) dx above int from 0 to inf f(x) dx } ; ~~"
+	line = "f(x,y,z) \"\\h'2p'\" = \"\\h'2p'\" left { \"\\h'2p'\" lpile { int from { - inf } to { + inf } g(x) dx above int from 0 to inf h(x) dx above int from 0 to inf f(x) dx } ; ~~"
 	line = line "cpile { int dx over { ae sup mx - be sup -mx } above int from { - inf } to { + inf } g(x)f(x) dx above a sub 0 + b sub 1 over x } ; ~~ "
-	line = line "A + B = matrix { ccol { a above b above c } ccol { d above e above f } ccol { g above h above k } } ; ~~"
+	line = line "A + B = left [ matrix { ccol { a above b above c } ccol { d above e above f } ccol { g above h above k } } right ] ; ~~"
 
-	line = line "matrix { ccol { a sub 1 above b sub 1 above c sub 1 } " \
+	line = line "left | matrix { ccol { a sub 1 above b sub 1 above c sub 1 } " \
 		 "ccol { a sub 2 above b sub 2 above c sub 2 } " \
-		 "ccol { a sub 3 above b sub 3 above c sub 3 } } \"\\h'2p'\"=\"\\h'2p'\" " \
+		 "ccol { a sub 3 above b sub 3 above c sub 3 } } right | \"\\h'2p'\"=\"\\h'2p'\" " \
 		 "sum from i,j,k=1 to 3 epsilon sub ijk a sub i b sub j c sub k ; ~~"
 	
 	line = line "f(x) \"\\h'2p'\"= \"\\h'2p'\" a over { b \"\\h'2p'\" + \"\\h'2p'\" 1 over { gamma + int xdx }~~ }~~ ~~"
 	#line = "b sub 1 over x"
+	print boxlist()
+	print ".sp 12v"
+
+	line = "F(u, v) \"\\h'2p'\" = \"\\h'2p'\" int from { - inf } to inf \"\\h'2p'\" int from { - inf } to inf f(x,y) \"\\h'2p'\" e sup { -j2 pi (ux+vy) } dx dy ; ~~~"
+	line = line "x \"\\h'2p'\"=\"\\h'2p'\" { sum from i=1 to n w sub i x sub i } over { sum from i=1 to n w sub i } "
+
+	line = "a + b + c \"\\h'2p'\" left | left ( left { left [ a over b right ] right } right ) right | \"\\h'2p'\" x+1"
+	pos = 1
+	print boxlist()
+
+	print ".sp 2v"
+	pos = 1
+	line = "left | a right | ; ~~ C sub n sup k \"\\h'2p'\" = \"\\h'2p'\" left ( cpile { n above k } right ) "
 	print boxlist()
 }
 
@@ -276,6 +298,105 @@ function defcolumn(dnum, col, nrows, adj,	res, row, ha)
 	return res
 }
 
+#
+# This function returns a troff string with left brace followed by boxtext.
+#
+function deflbrace(type, boxtext, dnum,		a, n, bt, mid, tp, ex)
+{
+	if (!br_macro_flag) {
+		# b0 macro is not defined yet
+		print ".de 0b\n" \
+		      ".nr 0b-w 0\n" \
+		      ".ds 0b-s \\Z'\n" \
+		      ".nr 0b-i 2\n" \
+		      ".nr 0b-c 4\n" \
+		      ".while (\\\\n[0b-i]<=\\\\n[0b-c]) \\{\\\n" \
+		      ".	if !'\\\\$\\\\n[0b-i]'' \\{\\\n" \
+		      ".		nr 0b-w \\w'\\\\$\\\\n[0b-i]'>?\\\\n[0b-w]\n" \
+		      ".		as 0b-s \\v'\\\\n[rsb]u'\\Z'\\\\$\\\\n[0b-i]'\\v'-\\\\n[rst]u'\n" \
+		      ".	\\}\n" \
+		      ".	nr 0b-i +1\n" \
+		      ".\\}\n" \
+		      ".as 0b-s '\\h'\\\\n[0b-w]u'\n" \
+		      ".nr 0b-w \\w'\\\\*[0b-s]'\n" \
+		      ".if (\\\\n[rst]-\\\\n[rsb]<\\\\$6) \\{\\\n" \
+		      ".	ie !'\\\\$3'' \\{\\\n" \
+		      ".		nr 0b-c \\\\$6-\\\\n[rst]-\\\\n[rsb]+2m-1u/2m\n" \
+		      ".		nr 0b-i 0\n" \
+		      ".		ds 0b-e\n" \
+		      ".		while (\\\\n[0b-i]<\\\\n[0b-c]) \\{\\\n" \
+		      ".			nr 0b-w \\w'\\\\$5'\n" \
+		      ".			as 0b-e \\v'\\\\n[rsb]u'\\Z'\\\\$5'\\v'-\\\\n[rst]u'\n" \
+		      ".			nr 0b-i +1\n" \
+		      ".		\\}\n" \
+		      ".		ds 0b-s \\Z'\n" \
+		      ".		if !'\\\\$2'' \\{\\\n" \
+		      ".			nr 0b-w \\w'\\\\$2'>?\\\\n[0b-w]\n" \
+		      ".			as 0b-s \\v'\\\\n[rsb]u'\\Z'\\\\$2'\\v'-\\\\n[rst]u'\n" \
+		      ".		\\}\n" \
+		      ".		as 0b-s \\\\*[0b-e]\n" \
+		      ".		if !'\\\\$3'' \\{\\\n" \
+		      ".			nr 0b-w \\w'\\\\$3'>?\\\\n[0b-w]\n" \
+		      ".			as 0b-s \\v'\\\\n[rsb]u'\\Z'\\\\$3'\\v'-\\\\n[rst]u'\n" \
+		      ".		\\}\n" \
+		      ".		as 0b-s \\\\*[0b-e]\n" \
+		      ".		if !'\\\\$4'' \\{\\\n" \
+		      ".			nr 0b-w \\w'\\\\$4'>?\\\\n[0b-w]\n" \
+		      ".			as 0b-s \\v'\\\\n[rsb]u'\\Z'\\\\$4'\\v'-\\\\n[rst]u'\n" \
+		      ".		\\}\n" \
+		      ".	\\}\n" \
+		      ".	el \\{\\\n" \
+		      ".		nr 0b-c \\\\$6-\\\\n[rst]-\\\\n[rsb]+1m-1u/1m\n" \
+		      ".		nr 0b-i 0\n" \
+		      ".		ds 0b-e\n" \
+		      ".		while (\\\\n[0b-i]<\\\\n[0b-c]) \\{\\\n" \
+		      ".			nr 0b-w \\w'\\\\$5'\n" \
+		      ".			as 0b-e \\v'\\\\n[rsb]u'\\Z'\\\\$5'\\v'-\\\\n[rst]u'\n" \
+		      ".			nr 0b-i +1\n" \
+		      ".		\\}\n" \
+		      ".		ds 0b-s \\Z'\n" \
+		      ".		if !'\\\\$2'' \\{\\\n" \
+		      ".			nr 0b-w \\w'\\\\$2'>?\\\\n[0b-w]\n" \
+		      ".			as 0b-s \\v'\\\\n[rsb]u'\\Z'\\\\$2'\\v'-\\\\n[rst]u'\n" \
+		      ".		\\}\n" \
+		      ".		as 0b-s \\\\*[0b-e]\n" \
+		      ".		if !'\\\\$4'' \\{\\\n" \
+		      ".			nr 0b-w \\w'\\\\$4'>?\\\\n[0b-w]\n" \
+		      ".			as 0b-s \\v'\\\\n[rsb]u'\\Z'\\\\$4'\\v'-\\\\n[rst]u'\n" \
+		      ".		\\}\n" \
+		      ".	\\}\n" \
+		      ".	as 0b-s '\\h'\\\\n[0b-w]u'\n" \
+		      ".	nr 0b-w \\w'\\\\*[0b-s]'\n" \
+		      ".\\}\n" \
+		      ".ds \\\\$1 \\v'\\\\n[rst]u-\\\\n[rsb]u/2u-\\\\n[rsb]u'\\\\*[0b-s]\\v'-\\\\n[rst]u-\\\\n[rsb]u/2u-\\\\n[rsb]u'\n" \
+		      ".."
+		br_macro_flag = 1
+	}
+	n = dnum
+	split(bracetab[type], a, ";")
+	bt = a[1]; mid = a[2]; tp = a[3]; ex = a[4]
+	
+	print ".nr 0w"n" 0\\w'" boxtext "'\n" \
+	      ".nr 0h"n" (\\n[rst]-26M)>?(0-\\n[rsb]+26M)*2\n" \
+	      ".0b 0lbr"n" "bt" "mid" "tp" "ex" \\n[0h"n"]"
+	
+	return "\\v'-26M'\\*[0lbr"n"]\\v'26M'" boxtext
+}
+
+#
+# This function returns a troff string with left brace.
+#
+function defrbrace(type, dnum,		a, n, bt, mid, tp, ex)
+{
+	n = dnum
+	split(bracetab[type], a, ";")	
+	bt = a[1]; mid = a[2]; tp = a[3]; ex = a[4]
+	
+	print ".0b 0rbr"n" "bt" "mid" "tp" "ex" \\n[0h"n"]"
+
+	return "\\v'-26M'\\*[0rbr"n"]\\v'26M'"
+}
+
 function boxlist(	w, res)
 {
 	while ((w = nextword()) && w != "}")
@@ -288,6 +409,13 @@ function pilelist(	w, res)
 	while ((w = nextword()) && w != "}" && w != "above")
 		res = res box("", -1)
 	return res
+}
+
+function bracedlist(	w, res)
+{
+	while ((w = nextword()) && w != "right")
+		res = res box("", -1)
+	return res	
 }
 
 # Prints the message to standard error and exit with non-zero code.
@@ -349,8 +477,6 @@ function box(leftside, minprec,		w, dnum, adj, res, row, col, numbox, denbox, su
 		if (!leftside)
 			errx("missing left side for `over'")
 		# Operator `over' associates to the left.
-		# We replace the left side with the fraction and proceed
-		# with the operators.
 		getword()
 		numbox = leftside preceding_space
 		denbox = box("", P_OVER)
@@ -358,7 +484,7 @@ function box(leftside, minprec,		w, dnum, adj, res, row, col, numbox, denbox, su
 		res = box(leftside, minprec)
 	} else {
 		if (leftside) {
-			# No operators can be applied to the leftside.
+			# No more operators are applicable to the leftside.
 			# The result of this box is the leftside itself.
 			res = leftside
 		} else {
@@ -422,6 +548,23 @@ function box(leftside, minprec,		w, dnum, adj, res, row, col, numbox, denbox, su
 						errx("missing closing `}' in matrix definition")
 					leftside = res defvcenter(leftside)
 				}
+			} else if (nextword() == "left") {
+				getword()
+				leftside = leftside preceding_space subsequent_space
+				w = getword()
+				if (!w)
+					errx("missing argument for `left'")
+				dnum = dnumber++
+				leftside = leftside deflbrace(w, bracedlist(), dnum)
+				if (nextword() == "right") {
+					getword()
+					leftside = leftside preceding_space subsequent_space
+					w = getword()
+					if (!w)
+						errx("missing argument for `right'")
+					leftside = leftside defrbrace(w, dnum)
+				}
+				res = leftside
 			} else {
 				w = getword()
 				leftside = preceding_space fontescape(w) subsequent_space
@@ -488,7 +631,7 @@ function fontescape(word,	c, i, res)
 				i++
 			}
 			res = res "\\/"
-		} else if (c ~ /[][(){}]/) {
+		} else if (c ~ /[][(){};:]/) {
 			res = res "\\fR\\," c "\\/\\fP"
 		} else
 			res = res c
