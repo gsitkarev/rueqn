@@ -10,13 +10,7 @@ BEGIN {
 	P_DOTDOT = 41; P_DOT = 42; P_HAT = 43; P_TILDE = 44; P_BAR = 45;
 	P_UNDER = 46; P_VEC = 47; P_DYAD = 48;
 
-	line = "dx over dy = x sub i sup k + y sub i sup n"
-	line = line "S = { a sub 1 x sub 1 + a sub 2 x sub 2 + a sub 3 x sub 3 + ... + a sub n x sub n } over { a sub 1 + a sub 2 } ; ~~"
-	line = line "B sub x sub c sup b \"\\h'2p'\" = \"\\h'2p'\" A sup x sup b sub c sup y ; ~~"
-#	line = "F(x, y) = int2 f(x, y) dx dy"
-#	line = "F(u, v) \"\\h'2p'\" = \"\\h'2p'\" int2 sub { - inf } sup inf f(x,y) e sup { -j2 pi (ux + vy) } dx dy } "
-#	line = "abc \"abc def\" xyz"
-#	line = "abc \"abcdef"
+	endok = 0		# true if got EN terminating directive
 	pos = 1			# position in the input line
 	next_word = ""		# next word in input line (internal only)
 	next_pspace = ""	# spaces before next word in input line (internal)
@@ -27,6 +21,7 @@ BEGIN {
 	subslvl = 0		# subscript level, 0 means main equation line
 
 	br_macro_flag = 0	# brace pile macro flag, 1 means macro defined
+	globaldef_flag = 0	# eqn global definitions, 1 means defined
 
 	# Space table holds troff replacement for space characters.
 #	spacetab["~"] = "\\h'1n'"
@@ -65,15 +60,32 @@ BEGIN {
 	bracetab["{"] = "\\[braceleftbt];\\[braceleftmid];\\[bracelefttp];\\[braceleftex]"
 	bracetab["}"] = "\\[bracerightbt];\\[bracerightmid];\\[bracerighttp];\\[bracerightex]"
 	bracetab["|"] = "\"\";\"\";\"\";\\[braceex]"
+}
 
-	print ".ps 12"
-	print ".vs 14"
-	print ".po 1c"
-	print ".ll +1i"
-	print ".sp 8v"
-
+/^\.EQ[ \t]*/ {
+	print $0
+	if (!globaldef_flag) {
+		defglobal()
+		globaldef_flag = 1
+	}
 	print ".ft I"
+	endok = 0
+	print boxlist()
+	if (!endok)
+		printf "rueqn[%u]: missing EN directive at end of file\n", PROCINFO["pid"] >"/dev/stderr"
+	else {
+		print $0
+		print ".lf " NR
+	}
+}
 
+{
+	print $0
+}
+
+# This function prints global eqn definitions to standard output.
+function defglobal()
+{
 	# For each sub/superscript level:
 	#
 	# 0sup<LEVEL>
@@ -94,32 +106,6 @@ BEGIN {
 	      ".nr 0s3font 4p\n" \
 	      ".nr 0s1dmin 1p\n" \
 	      ".nr 0s2dmin 1p"
-
-	line = "f(x,y,z) \"\\h'2p'\" = \"\\h'2p'\" left { \"\\h'2p'\" lpile { int from { - inf } to { + inf } g(x) dx above int from 0 to inf h(x) dx above int from 0 to inf f(x) dx } ; ~~"
-	line = line "cpile { int dx over { ae sup mx - be sup -mx } above int from { - inf } to { + inf } g(x)f(x) dx above a sub 0 + b sub 1 over x } ; ~~ "
-	line = line "A + B = left [ matrix { ccol { a above b above c } ccol { d above e above f } ccol { g above h above k } } right ] ; ~~"
-
-	line = line "left | matrix { ccol { a sub 1 above b sub 1 above c sub 1 } " \
-		 "ccol { a sub 2 above b sub 2 above c sub 2 } " \
-		 "ccol { a sub 3 above b sub 3 above c sub 3 } } right | \"\\h'2p'\"=\"\\h'2p'\" " \
-		 "sum from i,j,k=1 to 3 epsilon sub ijk a sub i b sub j c sub k ; ~~"
-	
-	line = line "f(x) \"\\h'2p'\"= \"\\h'2p'\" a over { b \"\\h'2p'\" + \"\\h'2p'\" 1 over { gamma + int xdx }~~ }~~ ~~"
-	#line = "b sub 1 over x"
-	print boxlist()
-	print ".sp 12v"
-
-	line = "F(u, v) \"\\h'2p'\" = \"\\h'2p'\" int from { - inf } to inf \"\\h'2p'\" int from { - inf } to inf f(x,y) \"\\h'2p'\" e sup { -j2 pi (ux+vy) } dx dy ; ~~~"
-	line = line "x \"\\h'2p'\"=\"\\h'2p'\" { sum from i=1 to n w sub i x sub i } over { sum from i=1 to n w sub i } "
-
-	line = "a + b + c \"\\h'2p'\" left | left ( left { left [ a over b right ] right } right ) right | \"\\h'2p'\" x+1"
-	pos = 1
-	print boxlist()
-
-	print ".sp 2v"
-	pos = 1
-	line = "left | a right | ; ~~ C sub n sup k \"\\h'2p'\" = \"\\h'2p'\" left ( cpile { n above k } right ) "
-	print boxlist()
 }
 
 # This function generates troff line with fraction,
@@ -654,6 +640,16 @@ function dosubst(w)
 function real_getword(space,	c, res)
 {
 	space[0] = space[1] = ""
+
+	# This is where we get the next line and signal to terminate processing.
+	if (!endok && chr(line, pos) == "") {
+		if (getline line <= 0 || line ~ /^\.EN[ \t]*/) {
+			endok = 1
+			line = ""
+			return ""
+		} else
+			pos = 1 
+	}
 
 	# FIXME:
 	# Insert reasonable substitution recursion limit to prevent endless loops.

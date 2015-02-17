@@ -1,0 +1,54 @@
+.ps 12p
+.vs 14p
+.sp 5v
+.EQ
+f(x,y,z) "\h'2p'" = "\h'2p'" left { "\h'2p'"
+ lpile {
+  int from { - inf } to { + inf } g(x) dx above
+  int from 0 to inf h(x) dx above
+  int from 0 to inf f(x) dx } ; ~~
+ cpile {
+  int dx over { ae sup mx - be sup -mx } above
+  int from { - inf } to { + inf } g(x)f(x) dx above
+  a sub 0 + b sub 1 over x
+ } ; ~~
+.EN
+.sp 5v
+.EQ
+A + B =
+ left [
+  matrix {
+   ccol { a above b above c }
+   ccol { d above e above f }
+   ccol { g above h above k }
+  }
+ right ] ; ~~
+left |
+ matrix {
+  ccol { a sub 1 above b sub 1 above c sub 1 }
+  ccol { a sub 2 above b sub 2 above c sub 2 }
+  ccol { a sub 3 above b sub 3 above c sub 3 }
+ }
+right | "\h'2p'" = "\h'2p'" sum from i,j,k=1 to 3 epsilon sub ijk a sub i b sub j c sub k ; ~~
+.EN
+.br
+.sp 2v
+.EQ
+f(x) "\h'2p'"= "\h'2p'" a over { b "\h'2p'" + "\h'2p'" 1 over { gamma + int xdx }~~ }~~ ~~
+.EN
+.sp 3v
+.EQ
+F(u, v) "\h'2p'" = "\h'2p'" int from { - inf } to inf "\h'2p'" int from { - inf } to inf f(x,y) "\h'2p'" e sup { -j2 pi (ux+vy) } dx dy ; ~~~
+.EN
+.sp 2v
+.EQ
+x "\h'2p'"="\h'2p'" { sum from i=1 to n w sub i x sub i } over { sum from i=1 to n w sub i }
+.EN
+.sp 3v
+.EQ
+a + b + c "\h'2p'" left | left ( left { left [ a over b right ] right } right ) right | "\h'2p'" x+1
+left | a right | ; ~~ C sub n sup k "\h'2p'" = "\h'2p'" left ( cpile { n above k } right )
+.EN
+.sp 2v
+.EQ
+.EN
