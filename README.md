@@ -10,6 +10,6 @@ This is not a complete work yet, but I hope it will be!
 
 You can run it through groff to see what it is able to do:
 
- $ rueqn | ./groff -Tps -dpaper=a4 >/tmp/out.ps
+ $ ./rueqn eqntest.tr | ./groff -Tps -dpaper=a4 >/tmp/out.ps
 
 For other details see the source code, it is very compact and small.
